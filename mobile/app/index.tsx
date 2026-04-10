@@ -53,7 +53,6 @@ export default function DashboardScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        accessibilityRole="scrollview"
       >
         {/* Date header */}
         <View style={styles.header}>

@@ -57,7 +57,7 @@ jobs:
             echo "→ Writing env file"
             cat > ~/food-and-health-app/web/.env.local << ENVEOF
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            NEXT_PUBLIC_APP_URL=https://nutriai.anik8.online
+            NEXT_PUBLIC_APP_URL=https://nutriai.anik8.me
             ENVEOF
 
             echo "→ Installing dependencies"

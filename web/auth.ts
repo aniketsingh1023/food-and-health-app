@@ -1,20 +1,5 @@
-import NextAuth from 'next-auth'
-import Google from 'next-auth/providers/google'
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
-  pages: {
-    signIn: '/auth',
-  },
-  callbacks: {
-    session({ session, token }) {
-      if (token.sub) session.user.id = token.sub
-      return session
-    },
-  },
-})
+// Auth disabled
+export const auth = () => null;
+export const signIn = () => null;
+export const signOut = () => null;
+export const handlers = { GET: () => null, POST: () => null };

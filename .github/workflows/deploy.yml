@@ -47,14 +47,18 @@ jobs:
           script: |
             set -e
             echo "→ Pulling latest code"
-            cd ~/food-and-health-app || (git clone https://github.com/aniketsingh1023/food-and-health-app.git ~/food-and-health-app && cd ~/food-and-health-app)
-            git pull origin main
+            if [ -d ~/food-and-health-app ]; then
+              cd ~/food-and-health-app && git pull origin main
+            else
+              git clone https://github.com/aniketsingh1023/food-and-health-app.git ~/food-and-health-app
+              cd ~/food-and-health-app
+            fi
 
             echo "→ Writing env file"
-            cat > ~/food-and-health-app/web/.env.local <<EOF
+            cat > ~/food-and-health-app/web/.env.local << ENVEOF
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            NEXT_PUBLIC_APP_URL=http://${{ secrets.SERVER_HOST }}
-            EOF
+            NEXT_PUBLIC_APP_URL=https://nutriai.anik8.online
+            ENVEOF
 
             echo "→ Installing dependencies"
             cd ~/food-and-health-app/web

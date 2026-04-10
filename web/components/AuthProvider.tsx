@@ -1,7 +1,6 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
-
+// Auth removed — passthrough wrapper kept for build compatibility
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return <>{children}</>;
 }

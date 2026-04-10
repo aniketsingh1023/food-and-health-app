@@ -1,27 +1,12 @@
 /**
- * Root layout with tab navigation and auth gate.
+ * Root layout with tab navigation.
  */
 
-import { useEffect, useState } from 'react';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { USER_STORAGE_KEY } from './auth';
 
 export default function RootLayout() {
-  const router = useRouter();
-  const [checked, setChecked] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(USER_STORAGE_KEY).then(value => {
-      if (!value) router.replace('/auth');
-      setChecked(true);
-    });
-  }, []);
-
-  if (!checked) return null;
-
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />

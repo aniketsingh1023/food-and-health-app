@@ -1,19 +1,12 @@
 /**
- * API base URL configuration.
- * - Dev: http://localhost:3000
- * - Prod: NEXT_PUBLIC_APP_URL env variable (set to your GCP VM IP/domain)
- *
- * Using an absolute URL ensures API routes work when called from
- * server components, the mobile app, or external clients.
+ * API base URL — empty string means relative URLs (/api/...).
+ * Works in the browser on any host (Cloud Run, custom domain, localhost).
+ * Override with NEXT_PUBLIC_APP_URL only if you need cross-origin API calls
+ * (e.g. from the mobile app).
  */
-
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? 'http://localhost:3000';
+  (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
 
-/**
- * Builds a full API URL from a path.
- * @example apiUrl('/api/analyze-food') → 'https://yourdomain.com/api/analyze-food'
- */
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }

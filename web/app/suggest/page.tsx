@@ -5,6 +5,7 @@ import { MealSuggestion } from '@/types';
 import { useFoodLog } from '@/hooks/useFoodLog';
 import { useDailyStats } from '@/hooks/useDailyStats';
 import { getTimeOfDay } from '@/lib/nutritionCalc';
+import { suggestMeal } from '@/services/mealService';
 
 const MACRO_ROWS = [
   { key: 'calories' as const, label: 'Calories', unit: 'kcal', color: '#ef4444' },
@@ -38,21 +39,15 @@ export default function SuggestPage() {
     setError(null);
     const allPrefs = [...selectedChips, preferences.trim()].filter(Boolean).join(', ');
     try {
-      const res = await fetch('/api/suggest-meal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          consumed: stats.consumed,
-          goals: stats.goals,
-          timeOfDay: getTimeOfDay(),
-          preferences: allPrefs || undefined,
-        }),
+      const data = await suggestMeal({
+        consumed: stats.consumed,
+        goals: stats.goals,
+        timeOfDay: getTimeOfDay(),
+        preferences: allPrefs || undefined,
       });
-      const { data, error: apiError } = await res.json() as { data: MealSuggestion | null; error: string | null };
-      if (apiError || !data) { setError(apiError ?? 'Could not fetch suggestion'); return; }
       setSuggestion(data);
-    } catch {
-      setError('Network error — check your connection.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error — check your connection.');
     } finally {
       setLoading(false);
     }

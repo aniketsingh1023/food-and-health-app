@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { WeeklyInsight } from '@/types';
 import { getRecentFoodLog, getWeeklyHabitLogs, getDailyGoals } from '@/lib/storage';
+import { getWeeklyInsights } from '@/services/insightsService';
 
 function ScoreMeter({ score }: { score: number }) {
   const pct = (score / 10) * 100;
@@ -37,20 +38,14 @@ export default function InsightsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/weekly-insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          weeklyLogs: getRecentFoodLog(7),
-          habitLogs: getWeeklyHabitLogs(),
-          goals: getDailyGoals(),
-        }),
+      const data = await getWeeklyInsights({
+        weeklyLogs: getRecentFoodLog(7),
+        habitLogs: getWeeklyHabitLogs(),
+        goals: getDailyGoals(),
       });
-      const { data, error: apiError } = await res.json() as { data: WeeklyInsight | null; error: string | null };
-      if (apiError || !data) { setError(apiError ?? 'Could not generate insights'); return; }
       setInsight(data);
-    } catch {
-      setError('Network error — check your connection.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error — check your connection.');
     } finally {
       setLoading(false);
     }

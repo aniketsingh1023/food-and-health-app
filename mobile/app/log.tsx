@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FoodCardMobile } from '../components/FoodCardMobile';
-import { API_BASE_URL } from '../lib/config';
+import { analyzeFood } from '../services/foodService';
 import type { FoodLogEntry, MealType } from '../types';
 
 const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
@@ -46,26 +46,11 @@ export default function LogScreen() {
     setIsLogging(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/analyze-food`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: description.trim(), mealType }),
-      });
-
-      const { data, error } = await res.json() as {
-        data: FoodLogEntry | null;
-        error: string | null;
-      };
-
-      if (error || !data) {
-        Alert.alert('Error', error ?? 'Could not analyze food');
-        return;
-      }
-
-      setLogged(prev => [data, ...prev]);
+      const entry = await analyzeFood(description.trim(), mealType);
+      setLogged(prev => [entry, ...prev]);
       setDescription('');
     } catch (err) {
-      Alert.alert('Network Error', 'Could not reach the server. Check your connection.');
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not reach the server.');
     } finally {
       setIsLogging(false);
     }

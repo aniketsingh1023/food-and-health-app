@@ -1,8 +1,11 @@
 /**
- * Mobile app configuration.
- * Points to the Next.js backend (BFF) for all AI API calls.
+ * API configuration for the mobile app.
+ * Set EXPO_PUBLIC_API_URL to your GCP VM IP/domain in production.
  */
 
-// In production, replace with your Cloud Run URL
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+  (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}

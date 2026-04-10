@@ -1,12 +1,9 @@
-/**
- * Custom hook for managing the food log state.
- */
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { FoodLogEntry, MealType } from '@/types';
 import { getFoodLogForDate, addFoodLogEntry } from '@/lib/storage';
+import { analyzeFood } from '@/services/foodService';
 
 interface LogFoodParams {
   description: string;
@@ -21,10 +18,6 @@ interface UseFoodLogReturn {
   refresh: () => void;
 }
 
-/**
- * Manages today's food log entries.
- * Calls the analyze-food API route and persists results.
- */
 export function useFoodLog(): UseFoodLogReturn {
   const today = new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
@@ -35,37 +28,18 @@ export function useFoodLog(): UseFoodLogReturn {
     setEntries(getFoodLogForDate(today));
   }, [today]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const logFood = useCallback(async ({ description, mealType }: LogFoodParams): Promise<FoodLogEntry | null> => {
     setIsLogging(true);
     setError(null);
-
     try {
-      const res = await fetch('/api/analyze-food', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, mealType }),
-      });
-
-      const { data, error: apiError } = await res.json() as {
-        data: FoodLogEntry | null;
-        error: string | null;
-      };
-
-      if (apiError || !data) {
-        setError(apiError ?? 'Failed to analyze food');
-        return null;
-      }
-
-      addFoodLogEntry(data);
+      const entry = await analyzeFood({ description, mealType });
+      addFoodLogEntry(entry);
       refresh();
-      return data;
+      return entry;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       return null;
     } finally {
       setIsLogging(false);

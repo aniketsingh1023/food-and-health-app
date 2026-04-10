@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard'   },
   { href: '/log',       label: 'Log Food'    },
   { href: '/suggest',   label: 'Suggestions' },
+  { href: '/chat',      label: 'AI Coach'    },
   { href: '/habits',    label: 'Habits'      },
   { href: '/insights',  label: 'Insights'    },
   { href: '/goals',     label: 'My Goals'    },
@@ -27,7 +28,7 @@ export function Nav() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <ul className="flex items-center justify-around px-1 py-2">
-          {NAV_ITEMS.slice(0, 5).map(item => {
+          {[NAV_ITEMS[0], NAV_ITEMS[1], NAV_ITEMS[3], NAV_ITEMS[4], NAV_ITEMS[5]].map(item => {
             const active = pathname === item.href;
             return (
               <li key={item.href}>
@@ -128,6 +129,11 @@ function NavIcon({ href, active }: { href: string; active: boolean }) {
     '/goals': (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+      </svg>
+    ),
+    '/chat': (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     ),
   };

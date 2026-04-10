@@ -117,6 +117,26 @@ export interface WeeklyInsightsRequest {
   goals: DailyGoals;
 }
 
+// ─── Chat / Conversational AI ─────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string; // ISO 8601
+}
+
+export interface ChatContext {
+  consumed: Macros;
+  goals: DailyGoals;
+  recentMeals: string[]; // last 5 food descriptions
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  context: ChatContext;
+}
+
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
 export interface MacroRingProps {

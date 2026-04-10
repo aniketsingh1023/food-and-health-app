@@ -84,6 +84,14 @@ jobs:
             --set-env-vars "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
             --quiet
 
+      - name: Make service public
+        run: |
+          gcloud run services add-iam-policy-binding $SERVICE \
+            --region $REGION \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --project $PROJECT_ID
+
       - name: Print service URL
         run: |
           gcloud run services describe $SERVICE \

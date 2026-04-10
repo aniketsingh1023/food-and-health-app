@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "NutriAI",
+    "slug": "nutriai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "nutriai",
+    "splash": {
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.nutriai.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#A8E6CF"
+      },
+      "package": "com.nutriai.app"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --color-mint: #A8E6CF;
+  --color-coral: #FF6B6B;
+  --color-slate-text: #2D3436;
+}
+
+body {
+  background: #F8FAFB;
+  color: var(--color-slate-text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Smooth focus rings everywhere */
+*:focus-visible {
+  outline: 2px solid var(--color-mint);
+  outline-offset: 2px;
+}
+
+/* Safe area padding for iOS bottom bar */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

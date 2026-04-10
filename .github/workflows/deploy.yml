@@ -49,6 +49,14 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Enable required GCP APIs
+        run: |
+          gcloud services enable \
+            artifactregistry.googleapis.com \
+            containerregistry.googleapis.com \
+            run.googleapis.com \
+            --project $PROJECT_ID --quiet
+
       - name: Configure Docker for GCR
         run: gcloud auth configure-docker --quiet
 

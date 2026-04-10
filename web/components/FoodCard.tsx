@@ -1,98 +1,88 @@
-/**
- * Card component displaying a logged food entry with its nutrition summary.
- */
-
 'use client';
 
 import { FoodLogEntry } from '@/types';
+import { NutritionGrade } from './NutritionGrade';
 
 interface FoodCardProps {
   entry: FoodLogEntry;
 }
 
 const MEAL_LABELS: Record<string, string> = {
-  breakfast: '🌅 Breakfast',
-  lunch: '☀️ Lunch',
-  dinner: '🌙 Dinner',
-  snack: '🍎 Snack',
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snack: 'Snack',
 };
 
-const SCORE_COLOR: Record<number, string> = {
-  1: '#FF6B6B', 2: '#FF6B6B', 3: '#FF6B6B',
-  4: '#FDCB6E', 5: '#FDCB6E', 6: '#FDCB6E',
-  7: '#A8E6CF', 8: '#A8E6CF', 9: '#00B894', 10: '#00B894',
-};
+const MACROS = [
+  { key: 'calories' as const, label: 'Cal',    unit: 'kcal', color: '#ef4444' },
+  { key: 'protein'  as const, label: 'Protein', unit: 'g',   color: '#3b82f6' },
+  { key: 'carbs'    as const, label: 'Carbs',   unit: 'g',   color: '#f59e0b' },
+  { key: 'fat'      as const, label: 'Fat',     unit: 'g',   color: '#8b5cf6' },
+  { key: 'fiber'    as const, label: 'Fiber',   unit: 'g',   color: '#10b981' },
+];
 
-/**
- * Renders a food log entry card with macros and health score.
- */
 export function FoodCard({ entry }: FoodCardProps) {
   const { analysis, mealType, loggedAt } = entry;
   const time = new Date(loggedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const scoreColor = SCORE_COLOR[Math.round(analysis.healthScore)] ?? '#A8E6CF';
 
   return (
     <article
-      className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3"
+      className="bg-white rounded-2xl border border-slate-100 p-4 space-y-3"
+      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
       aria-label={`Food entry: ${analysis.name}`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
+      {/* Header row */}
+      <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-slate-400">{MEAL_LABELS[mealType] ?? mealType} · {time}</p>
-          <h3 className="text-base font-semibold text-slate-700 truncate">{analysis.name}</h3>
-          <p className="text-xs text-slate-400">{analysis.servingSize}</p>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              {MEAL_LABELS[mealType] ?? mealType}
+            </span>
+            <span className="text-[10px] text-slate-300">{time}</span>
+          </div>
+          <h3 className="text-sm font-semibold text-slate-800 leading-snug">
+            {analysis.name}
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">{analysis.servingSize}</p>
         </div>
-        {/* Health score badge */}
-        <div
-          className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm"
-          style={{ backgroundColor: scoreColor }}
-          aria-label={`Health score: ${analysis.healthScore} out of 10`}
-        >
-          {analysis.healthScore}
-        </div>
+        <NutritionGrade score={analysis.healthScore} size="md" />
       </div>
 
-      {/* Macro pills */}
-      <div className="flex flex-wrap gap-2" role="list" aria-label="Nutrition breakdown">
-        <MacroPill label="Cal" value={analysis.macros.calories} unit="kcal" color="#FF6B6B" />
-        <MacroPill label="Protein" value={analysis.macros.protein} unit="g" color="#74B9FF" />
-        <MacroPill label="Carbs" value={analysis.macros.carbs} unit="g" color="#FDCB6E" />
-        <MacroPill label="Fat" value={analysis.macros.fat} unit="g" color="#A29BFE" />
-        <MacroPill label="Fiber" value={analysis.macros.fiber} unit="g" color="#A8E6CF" />
+      {/* Macro row */}
+      <div
+        className="grid grid-cols-5 gap-1.5"
+        role="list"
+        aria-label="Nutrition breakdown"
+      >
+        {MACROS.map(m => (
+          <div
+            key={m.key}
+            role="listitem"
+            className="bg-slate-50 rounded-xl p-2 text-center"
+            aria-label={`${m.label}: ${Math.round(analysis.macros[m.key])} ${m.unit}`}
+          >
+            <div
+              className="w-1.5 h-1.5 rounded-full mx-auto mb-1"
+              style={{ backgroundColor: m.color }}
+              aria-hidden="true"
+            />
+            <p className="text-xs font-bold text-slate-700 tabular-nums leading-none">
+              {Math.round(analysis.macros[m.key])}
+            </p>
+            <p className="text-[9px] text-slate-400 mt-0.5">{m.label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Tip */}
+      {/* AI tip */}
       {analysis.tip && (
-        <p className="text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 leading-relaxed">
-          💡 {analysis.tip}
-        </p>
+        <div className="bg-green-50 border border-green-100 rounded-xl px-3 py-2">
+          <p className="text-[11px] text-green-800 leading-relaxed">
+            <span className="font-semibold">AI tip: </span>{analysis.tip}
+          </p>
+        </div>
       )}
     </article>
-  );
-}
-
-interface MacroPillProps {
-  label: string;
-  value: number;
-  unit: string;
-  color: string;
-}
-
-function MacroPill({ label, value, unit, color }: MacroPillProps) {
-  return (
-    <div
-      role="listitem"
-      className="flex items-center gap-1 bg-slate-50 rounded-full px-2.5 py-1"
-      aria-label={`${label}: ${Math.round(value)} ${unit}`}
-    >
-      <span
-        className="w-2 h-2 rounded-full flex-shrink-0"
-        style={{ backgroundColor: color }}
-        aria-hidden="true"
-      />
-      <span className="text-xs text-slate-600 font-medium">{label}</span>
-      <span className="text-xs text-slate-500">{Math.round(value)}{unit}</span>
-    </div>
   );
 }

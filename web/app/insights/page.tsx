@@ -1,154 +1,182 @@
-/**
- * Weekly Insights page — AI-generated health summary for the past 7 days.
- */
-
 'use client';
 
 import { useState } from 'react';
 import { WeeklyInsight } from '@/types';
 import { getRecentFoodLog, getWeeklyHabitLogs, getDailyGoals } from '@/lib/storage';
 
+function ScoreMeter({ score }: { score: number }) {
+  const pct = (score / 10) * 100;
+  const color = score >= 8 ? '#16a34a' : score >= 5 ? '#f59e0b' : '#ef4444';
+  const label = score >= 8 ? 'Great week' : score >= 5 ? 'Average week' : 'Needs work';
+  return (
+    <div className="flex items-center gap-4">
+      <div
+        className="w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-white shrink-0"
+        style={{ backgroundColor: color }}
+        aria-label={`Overall score: ${score} out of 10`}
+      >
+        <span className="text-2xl font-bold leading-none">{score}</span>
+        <span className="text-[9px] font-medium opacity-80">/10</span>
+      </div>
+      <div>
+        <p className="text-sm font-bold text-slate-800">{label}</p>
+        <div className="mt-2 w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InsightsPage() {
   const [insight, setInsight] = useState<WeeklyInsight | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function fetchInsights() {
-    setIsLoading(true);
+    setLoading(true);
     setError(null);
-
     try {
-      const weeklyLogs = getRecentFoodLog(7);
-      const habitLogs = getWeeklyHabitLogs();
-      const goals = getDailyGoals();
-
       const res = await fetch('/api/weekly-insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weeklyLogs, habitLogs, goals }),
+        body: JSON.stringify({
+          weeklyLogs: getRecentFoodLog(7),
+          habitLogs: getWeeklyHabitLogs(),
+          goals: getDailyGoals(),
+        }),
       });
-
-      const { data, error: apiError } = await res.json() as {
-        data: WeeklyInsight | null;
-        error: string | null;
-      };
-
-      if (apiError || !data) {
-        setError(apiError ?? 'Could not generate insights');
-      } else {
-        setInsight(data);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
+      const { data, error: apiError } = await res.json() as { data: WeeklyInsight | null; error: string | null };
+      if (apiError || !data) { setError(apiError ?? 'Could not generate insights'); return; }
+      setInsight(data);
+    } catch {
+      setError('Network error — check your connection.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
-  const scoreColor = insight
-    ? insight.overallScore >= 8 ? '#00B894'
-    : insight.overallScore >= 5 ? '#A8E6CF'
-    : '#FF6B6B'
-    : '#A8E6CF';
-
   return (
-    <main className="flex-1 px-4 py-6 pb-24 md:pb-6 max-w-xl mx-auto w-full space-y-6">
-      {/* Header */}
-      <section aria-labelledby="insights-heading">
-        <h1 id="insights-heading" className="text-xl font-bold text-slate-700">Weekly Insights</h1>
-        <p className="text-sm text-slate-400 mt-0.5">AI summary of your last 7 days.</p>
-      </section>
+    <main className="flex-1 px-4 py-5 pb-24 md:pb-8 max-w-2xl mx-auto w-full space-y-5">
 
-      {/* Generate button */}
-      {!insight && (
-        <div className="text-center space-y-4 py-8">
-          <p className="text-5xl" role="img" aria-label="chart">📊</p>
-          <p className="text-slate-500 text-sm">
-            Let AI analyze your week and give you personalized health insights.
-          </p>
+      <div>
+        <h1 className="text-xl font-bold text-slate-800">Weekly Insights</h1>
+        <p className="text-sm text-slate-400 mt-0.5">AI analysis of your last 7 days.</p>
+      </div>
+
+      {!insight ? (
+        <div
+          className="bg-white rounded-2xl border border-slate-100 p-8 text-center space-y-4"
+          style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}
+        >
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Ready to review your week?</p>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+              Gemini Pro will analyse your food logs, habits, and macro trends to give you actionable insights.
+            </p>
+          </div>
           <button
             type="button"
             onClick={fetchInsights}
-            disabled={isLoading}
-            aria-busy={isLoading}
-            className="bg-[#FF6B6B] text-white font-semibold px-8 py-3.5 rounded-2xl
-              transition-all hover:bg-[#ff5252] disabled:opacity-50 disabled:cursor-not-allowed
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#FF6B6B]"
+            disabled={loading}
+            aria-busy={loading}
+            className="bg-green-600 text-white font-semibold px-8 py-3 rounded-xl text-sm
+              hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed
+              outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 transition-colors"
           >
-            {isLoading ? (
+            {loading ? (
               <span className="inline-flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
-                Analyzing your week…
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                Analysing…
               </span>
-            ) : (
-              '✨ Generate Insights'
-            )}
+            ) : 'Generate Insights'}
           </button>
-          {error && (
-            <p className="text-sm text-[#FF6B6B]" role="alert">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
         </div>
-      )}
-
-      {/* Insight display */}
-      {insight && (
+      ) : (
         <div className="space-y-4" aria-live="polite">
-          {/* Score */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex items-center gap-4">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-sm"
-              style={{ backgroundColor: scoreColor }}
-              aria-label={`Overall score: ${insight.overallScore} out of 10`}
-            >
-              {insight.overallScore}
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Overall Score</p>
-              <p className="text-slate-600 text-sm mt-1 leading-relaxed">{insight.summary}</p>
-            </div>
-          </div>
+
+          {/* Score card */}
+          <section
+            className="bg-white rounded-2xl border border-slate-100 p-5"
+            style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}
+            aria-labelledby="score-heading"
+          >
+            <h2 id="score-heading" className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Overall score</h2>
+            <ScoreMeter score={insight.overallScore} />
+            <p className="text-sm text-slate-600 mt-4 leading-relaxed">{insight.summary}</p>
+          </section>
 
           {/* Highlights */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2">
-            <h2 className="text-sm font-semibold text-[#00B894]">🏆 What went well</h2>
-            <ul className="space-y-1.5" aria-label="Weekly highlights">
+          <section
+            className="bg-white rounded-2xl border border-slate-100 p-4"
+            style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}
+            aria-labelledby="highlights-heading"
+          >
+            <h2 id="highlights-heading" className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">
+              What went well
+            </h2>
+            <ul className="space-y-2" aria-label="Weekly highlights">
               {insight.highlights.map((h, i) => (
-                <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
-                  <span className="text-[#00B894] mt-0.5 flex-shrink-0" aria-hidden="true">✓</span>
+                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
+                  <span className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5" aria-hidden="true">
+                    <svg width="8" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="#16a34a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
                   {h}
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
 
           {/* Improvements */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2">
-            <h2 className="text-sm font-semibold text-[#FDCB6E]">📈 Areas to improve</h2>
-            <ul className="space-y-1.5" aria-label="Areas for improvement">
+          <section
+            className="bg-white rounded-2xl border border-slate-100 p-4"
+            style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}
+            aria-labelledby="improvements-heading"
+          >
+            <h2 id="improvements-heading" className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">
+              Areas to improve
+            </h2>
+            <ul className="space-y-2" aria-label="Areas for improvement">
               {insight.improvements.map((imp, i) => (
-                <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
-                  <span className="text-[#FDCB6E] mt-0.5 flex-shrink-0" aria-hidden="true">→</span>
+                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
+                  <span className="w-4 h-4 rounded-full bg-amber-50 flex items-center justify-center shrink-0 mt-0.5" aria-hidden="true">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                    </svg>
+                  </span>
                   {imp}
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
 
-          {/* Tip */}
-          <div className="bg-[#A8E6CF]/15 border border-[#A8E6CF]/30 rounded-2xl p-4">
-            <h2 className="text-sm font-semibold text-slate-600 mb-1">💡 This week&apos;s tip</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">{insight.actionableTip}</p>
-          </div>
+          {/* Actionable tip */}
+          <section
+            className="bg-green-600 rounded-2xl p-5"
+            aria-labelledby="tip-heading"
+          >
+            <h2 id="tip-heading" className="text-xs font-semibold text-green-200 uppercase tracking-wider mb-2">
+              This week&apos;s action
+            </h2>
+            <p className="text-sm text-white leading-relaxed font-medium">{insight.actionableTip}</p>
+          </section>
 
-          {/* Regenerate */}
           <button
             type="button"
             onClick={fetchInsights}
-            disabled={isLoading}
-            className="w-full border-2 border-slate-200 text-slate-600 font-medium py-2.5 rounded-2xl
-              hover:border-[#A8E6CF] transition-colors text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A8E6CF]"
+            disabled={loading}
+            className="w-full border-2 border-slate-200 text-slate-600 font-semibold py-2.5 rounded-xl text-sm
+              hover:border-green-400 hover:text-green-700 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-green-600"
           >
-            Regenerate insights
+            Regenerate
           </button>
         </div>
       )}

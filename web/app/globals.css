@@ -1,25 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --color-mint: #A8E6CF;
-  --color-coral: #FF6B6B;
-  --color-slate-text: #2D3436;
+  /* Brand */
+  --green-50: #f0fdf4;
+  --green-100: #dcfce7;
+  --green-500: #22c55e;
+  --green-600: #16a34a;
+  --green-700: #15803d;
+
+  --orange-50: #fff7ed;
+  --orange-500: #f97316;
+  --orange-600: #ea580c;
+
+  /* Surface */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Text */
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+
+  /* Macro colors */
+  --cal: #ef4444;
+  --protein: #3b82f6;
+  --carbs: #f59e0b;
+  --fat: #8b5cf6;
+  --fiber: #10b981;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: #F8FAFB;
-  color: var(--color-slate-text);
+  background: var(--bg);
+  color: var(--text);
   font-family: Inter, system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-/* Smooth focus rings everywhere */
+/* Focus ring */
 *:focus-visible {
-  outline: 2px solid var(--color-mint);
+  outline: 2px solid var(--green-600);
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* Safe area padding for iOS bottom bar */
-.safe-area-pb {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* Smooth transitions */
+button, a {
+  transition: opacity 0.15s, background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+/* Safe area for mobile bottom */
+.pb-safe {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
 }

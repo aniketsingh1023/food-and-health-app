@@ -47,17 +47,22 @@ export async function POST(req: NextRequest) {
     },
   };
 
-  const geminiRes = await fetch(
-    `${GEMINI_API_BASE}/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }
-  );
+  // Try 2.5-flash first, fall back to 2.0-flash on 503/429
+  const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  let geminiRes: Response | null = null;
 
-  if (!geminiRes.ok || !geminiRes.body) {
-    const errorText = await geminiRes.text();
+  for (const model of MODELS) {
+    const res = await fetch(
+      `${GEMINI_API_BASE}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    if (res.status === 503 || res.status === 429) continue; // try next model
+    geminiRes = res;
+    break;
+  }
+
+  if (!geminiRes || !geminiRes.ok || !geminiRes.body) {
+    const errorText = geminiRes ? await geminiRes.text() : 'All models unavailable';
     return Response.json({ error: `Gemini error: ${errorText}` }, { status: 502 });
   }
 

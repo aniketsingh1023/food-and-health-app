@@ -1,6 +1,6 @@
 /**
- * Gemini AI client with typed prompts and structured JSON output.
- * Uses gemini-1.5-flash for speed-critical paths, gemini-1.5-pro for analysis.
+ * Gemini AI client with typed prompts, structured JSON output,
+ * automatic retry on 503, and model fallback chain.
  */
 
 import {
@@ -15,6 +15,15 @@ import {
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
+type GeminiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro' | 'gemini-2.0-flash';
+
+/** Fallback chain per model */
+const MODEL_FALLBACKS: Record<GeminiModel, GeminiModel[]> = {
+  'gemini-2.5-flash': ['gemini-2.0-flash'],
+  'gemini-2.5-pro':   ['gemini-2.5-flash', 'gemini-2.0-flash'],
+  'gemini-2.0-flash': [],
+};
+
 /** Simple in-memory cache for repeated food lookups */
 const foodCache = new Map<string, FoodAnalysis>();
 
@@ -28,12 +37,45 @@ interface GeminiRequest {
   systemInstruction?: { parts: Array<{ text: string }> };
 }
 
+async function callModel<T>(
+  model: GeminiModel,
+  body: GeminiRequest,
+  apiKey: string,
+): Promise<{ data: T | null; retryable: boolean }> {
+  const res = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (res.status === 503 || res.status === 429) {
+    return { data: null, retryable: true };
+  }
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Gemini API error ${res.status}: ${errorText}`);
+  }
+
+  const json = await res.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) return { data: null, retryable: false };
+
+  try {
+    return { data: JSON.parse(text) as T, retryable: false };
+  } catch {
+    return { data: null, retryable: false };
+  }
+}
+
 /**
- * Makes a typed request to the Gemini API.
- * Returns parsed JSON or throws a typed error.
+ * Calls Gemini with automatic retry (once) and model fallback on 503/429.
  */
 async function callGemini<T>(
-  model: 'gemini-2.5-flash' | 'gemini-2.5-pro',
+  model: GeminiModel,
   prompt: string,
   systemInstruction: string,
   fallback: T,
@@ -51,29 +93,19 @@ async function callGemini<T>(
     systemInstruction: { parts: [{ text: systemInstruction }] },
   };
 
-  const res = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const modelsToTry: GeminiModel[] = [model, ...MODEL_FALLBACKS[model]];
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${errorText}`);
+  for (const m of modelsToTry) {
+    // Try each model up to 2 times before falling back
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
+      const { data, retryable } = await callModel<T>(m, body, apiKey);
+      if (data !== null) return data;
+      if (!retryable) break; // non-retryable error, try next model
+    }
   }
 
-  const json = await res.json() as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return fallback;
-
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return fallback;
-  }
+  return fallback;
 }
 
 // ─── Food Analysis ────────────────────────────────────────────────────────────
@@ -91,10 +123,6 @@ const FOOD_ANALYSIS_SYSTEM = `You are a certified nutritionist. Return ONLY vali
 {"name":string,"macros":{"calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number},"healthScore":number,"tip":string,"servingSize":string,"ingredients":string[]}
 healthScore is 1-10. All macro values are numbers. tip is under 100 chars.`;
 
-/**
- * Analyzes a food description and returns nutrition data via Gemini.
- * Results are cached by normalized description key.
- */
 export async function analyzeFood(description: string): Promise<FoodAnalysis> {
   const cacheKey = description.toLowerCase().trim();
   const cached = foodCache.get(cacheKey);
@@ -124,9 +152,6 @@ const MEAL_SUGGESTION_FALLBACK: MealSuggestion = {
 const MEAL_SUGGESTION_SYSTEM = `You are a meal planning assistant. Return ONLY valid JSON:
 {"name":string,"description":string,"estimatedMacros":{"calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number},"reason":string,"prepTime":string}`;
 
-/**
- * Suggests a meal based on remaining macros and time of day.
- */
 export async function suggestMeal(
   consumed: Macros,
   goals: DailyGoals,
@@ -135,8 +160,8 @@ export async function suggestMeal(
 ): Promise<MealSuggestion> {
   const remaining = {
     calories: Math.max(0, goals.calories - consumed.calories),
-    protein: Math.max(0, goals.protein - consumed.protein),
-    carbs: Math.max(0, goals.carbs - consumed.carbs),
+    protein:  Math.max(0, goals.protein  - consumed.protein),
+    carbs:    Math.max(0, goals.carbs    - consumed.carbs),
   };
 
   const prompt = `Time: ${timeOfDay}. Remaining today — calories: ${remaining.calories}, protein: ${remaining.protein}g, carbs: ${remaining.carbs}g.${preferences ? ` Preferences: ${preferences}.` : ''} Suggest one meal.`;
@@ -163,9 +188,6 @@ const WEEKLY_INSIGHT_SYSTEM = `You are a health coach. Return ONLY valid JSON:
 {"summary":string,"highlights":string[],"improvements":string[],"actionableTip":string,"overallScore":number}
 overallScore is 1-10. Arrays have 2-3 items max. Keep it concise.`;
 
-/**
- * Generates a weekly health summary using Gemini Pro for deeper analysis.
- */
 export async function generateWeeklyInsights(
   weeklyLogs: FoodLogEntry[],
   habitLogs: HabitLog[],

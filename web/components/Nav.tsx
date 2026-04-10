@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard'   },
   { href: '/log',       label: 'Log Food'    },
   { href: '/suggest',   label: 'Suggestions' },
-  { href: '/chat',      label: 'AI Coach'    },
   { href: '/habits',    label: 'Habits'      },
   { href: '/insights',  label: 'Insights'    },
   { href: '/goals',     label: 'My Goals'    },
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
 
 export function Nav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const isLanding = pathname === '/';
 
   if (isLanding) return null;
@@ -28,7 +30,7 @@ export function Nav() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <ul className="flex items-center justify-around px-1 py-2">
-          {[NAV_ITEMS[0], NAV_ITEMS[1], NAV_ITEMS[3], NAV_ITEMS[4], NAV_ITEMS[5]].map(item => {
+          {NAV_ITEMS.slice(0, 5).map(item => {
             const active = pathname === item.href;
             return (
               <li key={item.href}>
@@ -89,7 +91,42 @@ export function Nav() {
           })}
         </ul>
 
-        <div className="p-4 border-t border-slate-100">
+        {/* ── User profile + sign out ── */}
+        <div className="p-3 border-t border-slate-100 space-y-2">
+          {session?.user && (
+            <div className="flex items-center gap-2.5 px-2 py-1.5">
+              {session.user.image ? (
+                <Image
+                  src={session.user.image}
+                  alt={session.user.name ?? 'User avatar'}
+                  width={28}
+                  height={28}
+                  className="rounded-full shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-green-700">
+                    {session.user.name?.[0]?.toUpperCase() ?? 'U'}
+                  </span>
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-700 truncate">{session.user.name}</p>
+                <p className="text-[10px] text-slate-400 truncate">{session.user.email}</p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => signOut({ callbackUrl: '/' })}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign out
+          </button>
           <p className="text-[10px] text-slate-400 text-center">Powered by Gemini AI</p>
         </div>
       </nav>

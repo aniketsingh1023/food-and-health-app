@@ -33,7 +33,7 @@ interface GeminiRequest {
  * Returns parsed JSON or throws a typed error.
  */
 async function callGemini<T>(
-  model: 'gemini-1.5-flash' | 'gemini-1.5-pro',
+  model: 'gemini-2.5-flash' | 'gemini-2.5-pro',
   prompt: string,
   systemInstruction: string,
   fallback: T,
@@ -101,7 +101,7 @@ export async function analyzeFood(description: string): Promise<FoodAnalysis> {
   if (cached) return cached;
 
   const result = await callGemini<FoodAnalysis>(
-    'gemini-1.5-flash',
+    'gemini-2.5-flash',
     `Analyze this meal for nutrition: "${description}"`,
     FOOD_ANALYSIS_SYSTEM,
     FOOD_ANALYSIS_FALLBACK,
@@ -142,7 +142,7 @@ export async function suggestMeal(
   const prompt = `Time: ${timeOfDay}. Remaining today — calories: ${remaining.calories}, protein: ${remaining.protein}g, carbs: ${remaining.carbs}g.${preferences ? ` Preferences: ${preferences}.` : ''} Suggest one meal.`;
 
   return callGemini<MealSuggestion>(
-    'gemini-1.5-flash',
+    'gemini-2.5-flash',
     prompt,
     MEAL_SUGGESTION_SYSTEM,
     MEAL_SUGGESTION_FALLBACK,
@@ -182,7 +182,7 @@ export async function generateWeeklyInsights(
   const prompt = `Weekly stats: ${weeklyLogs.length} meals logged, avg ${avgCalories} cal/day (goal: ${goals.calories}), habit completion: ${habitCompletionRate}%. Generate insights.`;
 
   return callGemini<WeeklyInsight>(
-    'gemini-1.5-pro',
+    'gemini-2.5-pro',
     prompt,
     WEEKLY_INSIGHT_SYSTEM,
     WEEKLY_INSIGHT_FALLBACK,

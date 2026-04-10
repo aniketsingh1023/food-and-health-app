@@ -1,12 +1,22 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import { Nav } from '@/components/Nav';
+import { ClientLayout } from '@/components/ClientLayout';
+import { FloatingChatButton } from '@/components/FloatingChatButton';
+import { AuthProvider } from '@/components/AuthProvider';
 import './globals.css';
 
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-jakarta',
+  weight: ['400', '500', '600', '700', '800'],
 });
 
 export const metadata: Metadata = {
@@ -25,12 +35,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${jakarta.variable}`}>
       <body className="min-h-screen flex bg-[#f8fafc]">
-        <Nav />
-        <div className="flex-1 md:ml-52 flex flex-col min-h-screen">
-          {children}
-        </div>
+        <AuthProvider>
+          <Nav />
+          <ClientLayout>
+            {children}
+          </ClientLayout>
+          <FloatingChatButton />
+        </AuthProvider>
       </body>
     </html>
   );

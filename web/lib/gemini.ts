@@ -96,12 +96,14 @@ async function callGemini<T>(
   const modelsToTry: GeminiModel[] = [model, ...MODEL_FALLBACKS[model]];
 
   for (const m of modelsToTry) {
-    // Try each model up to 2 times before falling back
+    // Try each model up to 2 times before moving to the fallback model
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
       const { data, retryable } = await callModel<T>(m, body, apiKey);
       if (data !== null) return data;
-      if (!retryable) break; // non-retryable error, try next model
+      // Non-retryable (malformed JSON, empty response) — no point trying other models
+      if (!retryable) return fallback;
+      // Retryable (503/429) — loop to retry or move to next model
     }
   }
 

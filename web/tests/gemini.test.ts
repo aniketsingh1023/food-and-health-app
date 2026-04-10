@@ -81,17 +81,18 @@ describe('analyzeFood', () => {
     await expect(analyzeFood('some food')).rejects.toThrow('GEMINI_API_KEY is not configured');
   });
 
-  it('throws on non-OK API response', async () => {
-    (global.fetch as jest.Mock).mockReturnValueOnce(
-      Promise.resolve({
-        ok: false,
-        status: 429,
-        text: () => Promise.resolve('Rate limit exceeded'),
-      }),
-    );
+  it('returns fallback on 429 / rate limit (all models exhausted)', async () => {
+    // All fetch calls return 429 — retries exhaust every model in the fallback chain
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve('Rate limit exceeded'),
+    });
 
     const { analyzeFood } = await import('../lib/gemini');
-    await expect(analyzeFood('rate limited food')).rejects.toThrow('Gemini API error 429');
+    const result = await analyzeFood('rate limited food');
+    expect(result).toBeDefined();
+    expect(result.name).toBe('Unknown Food'); // graceful fallback, no throw
   });
 });
 

@@ -1,9 +1,12 @@
 import { apiUrl } from '@/lib/apiConfig';
-import type { ChatMessage, ChatContext } from '@/types';
+import type { ChatMessage, ChatContext, ApiResponse } from '@/types';
 
 /**
  * Sends a chat message and streams the assistant response chunk by chunk.
  * Calls onChunk for each text fragment; returns the full response text.
+ *
+ * On non-2xx responses the backend always returns ApiResponse<null>.
+ * This function parses that body so the caller gets the human-readable message.
  */
 export async function sendChatMessage(
   messages: ChatMessage[],
@@ -16,9 +19,28 @@ export async function sendChatMessage(
     body: JSON.stringify({ messages, context }),
   });
 
-  if (!res.ok || !res.body) {
-    const errorText = await res.text().catch(() => 'Unknown error');
-    throw new Error(errorText || `Server error: ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('Retry-After');
+      throw new Error(
+        retryAfter
+          ? `Too many messages. Please wait ${retryAfter}s before sending again.`
+          : 'Too many messages. Please slow down.',
+      );
+    }
+    try {
+      const body = (await res.json()) as ApiResponse<null>;
+      if (body.error) throw new Error(body.error);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== 'body already used') {
+        throw parseErr;
+      }
+    }
+    throw new Error(`Chat unavailable (${res.status}). Try again shortly.`);
+  }
+
+  if (!res.body) {
+    throw new Error('Empty response from server');
   }
 
   const reader = res.body.getReader();

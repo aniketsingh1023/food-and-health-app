@@ -8,6 +8,7 @@ import { WeeklyInsightsRequest, WeeklyInsight, ApiResponse } from '@/types';
 
 /**
  * Generates a Gemini-powered weekly health summary.
+ * Surfaces the backend's descriptive error messages including rate-limit text.
  */
 export async function getWeeklyInsights(
   request: WeeklyInsightsRequest,
@@ -19,7 +20,23 @@ export async function getWeeklyInsights(
   });
 
   if (!res.ok) {
-    throw new Error(`Server error: ${res.status}`);
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('Retry-After');
+      throw new Error(
+        retryAfter
+          ? `Too many requests. Please wait ${retryAfter}s before trying again.`
+          : 'You can generate insights up to 5 times per minute.',
+      );
+    }
+    try {
+      const body = (await res.json()) as ApiResponse<unknown>;
+      if (body.error) throw new Error(body.error);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== 'body already used') {
+        throw parseErr;
+      }
+    }
+    throw new Error('Failed to generate insights');
   }
 
   const { data, error } = (await res.json()) as ApiResponse<WeeklyInsight>;

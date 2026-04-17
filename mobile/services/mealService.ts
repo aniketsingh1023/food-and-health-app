@@ -15,7 +15,23 @@ export async function suggestMeal(
     body: JSON.stringify(request),
   });
 
-  if (!res.ok) throw new Error(`Server error: ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('Retry-After');
+      throw new Error(
+        retryAfter
+          ? `Too many requests. Please wait ${retryAfter}s before trying again.`
+          : 'Too many requests. Please slow down.',
+      );
+    }
+    try {
+      const body = (await res.json()) as ApiResponse<unknown>;
+      if (body.error) throw new Error(body.error);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== 'body already used') throw parseErr;
+    }
+    throw new Error('Failed to get meal suggestion');
+  }
 
   const { data, error } = (await res.json()) as ApiResponse<MealSuggestion>;
   if (error || !data) throw new Error(error ?? 'Failed to get meal suggestion');

@@ -21,9 +21,28 @@ export async function sendChatMessage(
     body: JSON.stringify({ messages, context }),
   });
 
-  if (!res.ok || !res.body) {
-    const errorText = await res.text().catch(() => 'Unknown error');
-    throw new Error(errorText || `Server error: ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('Retry-After');
+      throw new Error(
+        retryAfter
+          ? `Too many messages. Please wait ${retryAfter}s before sending again.`
+          : 'Too many messages. Please slow down.',
+      );
+    }
+    try {
+      const body = (await res.json()) as { data: null; error: string | null };
+      if (body.error) throw new Error(body.error);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== 'body already used') {
+        throw parseErr;
+      }
+    }
+    throw new Error(`Chat unavailable (${res.status}). Try again shortly.`);
+  }
+
+  if (!res.body) {
+    throw new Error('Empty response from server');
   }
 
   const reader = res.body.getReader();

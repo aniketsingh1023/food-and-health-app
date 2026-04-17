@@ -12,6 +12,13 @@ jest.mock('../lib/gemini', () => ({
   analyzeFood: jest.fn(),
 }));
 
+// Mock rate limiter so tests are not capped
+jest.mock('../lib/rateLimiter', () => ({
+  checkRateLimit: jest.fn().mockReturnValue({ allowed: true, remaining: 29, retryAfterMs: 0 }),
+  getClientIp: jest.fn().mockReturnValue('127.0.0.1'),
+  RATE_LIMITS: { 'analyze-food': { maxRequests: 30, windowMs: 60000 } },
+}));
+
 import { analyzeFood as mockAnalyzeFood } from '../lib/gemini';
 import { POST } from '../app/api/analyze-food/route';
 import { FoodAnalysis } from '../types';
@@ -113,5 +120,20 @@ describe('POST /api/analyze-food', () => {
     const req = makeRequest({ description: '  oatmeal  ', mealType: 'breakfast' });
     await POST(req);
     expect(mockAnalyzeFood).toHaveBeenCalledWith('oatmeal');
+  });
+
+  it('returns 400 when description exceeds 500 characters', async () => {
+    const req = makeRequest({ description: 'a'.repeat(501), mealType: 'lunch' });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/500/);
+    expect(body.data).toBeNull();
+  });
+
+  it('accepts description of exactly 500 characters', async () => {
+    const req = makeRequest({ description: 'a'.repeat(500), mealType: 'lunch' });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
   });
 });

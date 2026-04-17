@@ -1,113 +1,407 @@
 /**
- * Mobile Dashboard screen — macro rings and today's food log.
+ * Dashboard screen — macro summary and today's food log.
+ * Reads from AsyncStorage, supports pull-to-refresh, shows real streak.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
+  FlatList,
+  RefreshControl,
   StyleSheet,
-  ActivityIndicator,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+
 import { MacroRingMobile } from '../components/MacroRingMobile';
 import { FoodCardMobile } from '../components/FoodCardMobile';
-import { API_BASE_URL } from '../lib/config';
-import type { FoodLogEntry, Macros, DailyGoals } from '../types';
+import { SkeletonCard } from '../components/SkeletonCard';
+import {
+  getFoodLogForDate,
+  removeFoodLogEntry,
+  getDailyGoals,
+  getStreak,
+} from '../lib/storage';
+import { sumMacros } from '../lib/nutritionCalc';
+import { DEFAULT_GOALS } from '../lib/storage';
+import type { DailyGoals, FoodLogEntry, Macros } from '../types';
 
-const DEFAULT_GOALS: DailyGoals = {
-  calories: 2000,
-  protein: 50,
-  carbs: 250,
-  fat: 65,
-  fiber: 25,
-};
+const MACRO_RINGS = [
+  { key: 'calories' as const, label: 'Calories', color: '#ef4444', unit: 'kcal' },
+  { key: 'protein'  as const, label: 'Protein',  color: '#3b82f6', unit: 'g'    },
+  { key: 'carbs'    as const, label: 'Carbs',    color: '#f59e0b', unit: 'g'    },
+  { key: 'fiber'    as const, label: 'Fiber',    color: '#10b981', unit: 'g'    },
+];
 
-function sumMacros(entries: FoodLogEntry[]): Macros {
-  return entries.reduce<Macros>(
-    (acc, e) => ({
-      calories: acc.calories + e.analysis.macros.calories,
-      protein: acc.protein + e.analysis.macros.protein,
-      carbs: acc.carbs + e.analysis.macros.carbs,
-      fat: acc.fat + e.analysis.macros.fat,
-      fiber: acc.fiber + e.analysis.macros.fiber,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+function CalorieSummaryBar({
+  consumed,
+  goals,
+}: {
+  consumed: Macros;
+  goals: DailyGoals;
+}) {
+  const pct = goals.calories > 0
+    ? Math.min(100, Math.round((consumed.calories / goals.calories) * 100))
+    : 0;
+  const remaining = Math.max(0, goals.calories - consumed.calories);
+  const overGoal = consumed.calories > goals.calories;
+
+  return (
+    <View style={styles.calCard}>
+      <View style={styles.calCardHeader}>
+        <Text style={styles.sectionLabel}>Calories</Text>
+        <View
+          style={[
+            styles.calBadge,
+            { backgroundColor: overGoal ? '#fef2f2' : pct >= 80 ? '#f0fdf4' : '#f8fafc' },
+          ]}
+        >
+          <Text
+            style={[
+              styles.calBadgeText,
+              { color: overGoal ? '#ef4444' : pct >= 80 ? '#16a34a' : '#64748b' },
+            ]}
+          >
+            {pct}% of goal
+          </Text>
+        </View>
+      </View>
+
+      {/* Progress bar */}
+      <View
+        style={styles.progressTrack}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: goals.calories, now: Math.round(consumed.calories) }}
+        accessibilityLabel={`Calorie progress: ${Math.round(consumed.calories)} of ${goals.calories} kcal`}
+      >
+        <View
+          style={[
+            styles.progressFill,
+            {
+              width: `${pct}%` as unknown as number,
+              backgroundColor: overGoal ? '#ef4444' : '#16a34a',
+            },
+          ]}
+        />
+      </View>
+
+      <View style={styles.calStats}>
+        <View>
+          <Text style={styles.calBigNumber}>{Math.round(consumed.calories).toLocaleString()}</Text>
+          <Text style={styles.calSubLabel}>kcal consumed</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.calBigNumber, { color: overGoal ? '#ef4444' : '#16a34a', fontSize: 20 }]}>
+            {remaining.toLocaleString()}
+          </Text>
+          <Text style={styles.calSubLabel}>kcal remaining</Text>
+        </View>
+      </View>
+    </View>
   );
 }
 
 export default function DashboardScreen() {
+  const router = useRouter();
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [goals, setGoals] = useState<DailyGoals>(DEFAULT_GOALS);
+  const [streak, setStreak] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const today = new Date().toISOString().slice(0, 10);
   const consumed = sumMacros(entries);
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'short', day: 'numeric',
+
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
   });
 
-  // In a real app, entries would come from shared state / AsyncStorage
-  // For demo, they are kept in local state and populated by LogScreen
+  const loadData = useCallback(async () => {
+    try {
+      const [todayEntries, savedGoals, savedStreak] = await Promise.all([
+        getFoodLogForDate(today),
+        getDailyGoals(),
+        getStreak(),
+      ]);
+      setEntries(todayEntries);
+      setGoals(savedGoals);
+      setStreak(savedStreak);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [today]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+  }, [loadData]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    await removeFoodLogEntry(id);
+    setEntries(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  const handleLogPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('/log');
+  }, [router]);
+
+  // Skeleton while initial load
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.scrollContent}>
+          <SkeletonCard lines={2} />
+          <SkeletonCard lines={4} />
+          <SkeletonCard lines={3} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const reversedEntries = entries.slice().reverse();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
+      <FlatList
+        data={reversedEntries}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-      >
-        {/* Date header */}
-        <View style={styles.header}>
-          <Text style={styles.dateText}>{today}</Text>
-          <View style={styles.streakBadge} accessibilityLabel="Streak badge">
-            <Text style={styles.streakText}>🔥 0 day streak</Text>
-          </View>
-        </View>
-
-        {/* Macro rings */}
-        <View style={styles.card} accessibilityLabel="Daily macro progress">
-          <Text style={styles.sectionTitle}>Daily Progress</Text>
-          <View style={styles.ringsRow}>
-            <MacroRingMobile label="Calories" value={consumed.calories} goal={DEFAULT_GOALS.calories} color="#FF6B6B" unit="kcal" />
-            <MacroRingMobile label="Protein" value={consumed.protein} goal={DEFAULT_GOALS.protein} color="#74B9FF" unit="g" />
-            <MacroRingMobile label="Carbs" value={consumed.carbs} goal={DEFAULT_GOALS.carbs} color="#FDCB6E" unit="g" />
-            <MacroRingMobile label="Fiber" value={consumed.fiber} goal={DEFAULT_GOALS.fiber} color="#A8E6CF" unit="g" />
-          </View>
-        </View>
-
-        {/* Today's log */}
-        <View style={styles.logSection}>
-          <Text style={styles.sectionTitle}>Today&apos;s Log</Text>
-          {loading ? (
-            <ActivityIndicator color="#A8E6CF" />
-          ) : entries.length === 0 ? (
-            <View style={styles.emptyState} accessibilityLabel="No meals logged">
-              <Text style={styles.emptyEmoji}>🍽️</Text>
-              <Text style={styles.emptyText}>No meals logged yet.</Text>
-              <Text style={styles.emptyHint}>Tap Log to add your first meal.</Text>
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#16a34a"
+            colors={['#16a34a']}
+          />
+        }
+        ListHeaderComponent={
+          <>
+            {/* Date + streak header */}
+            <View style={styles.pageHeader}>
+              <View>
+                <Text style={styles.dateLabelSmall}>{todayLabel}</Text>
+                <Text style={styles.pageTitle}>Today's Overview</Text>
+              </View>
+              {streak > 0 && (
+                <View
+                  style={styles.streakBadge}
+                  accessibilityRole="text"
+                  accessibilityLabel={`${streak} day streak`}
+                >
+                  <Text style={styles.streakNumber}>{streak}</Text>
+                  <Text style={styles.streakLabel}>day streak 🔥</Text>
+                </View>
+              )}
             </View>
-          ) : (
-            entries.slice().reverse().map(entry => (
-              <FoodCardMobile key={entry.id} entry={entry} />
-            ))
-          )}
-        </View>
-      </ScrollView>
+
+            {/* Calorie bar card */}
+            <CalorieSummaryBar consumed={consumed} goals={goals} />
+
+            {/* Macro rings */}
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>Macronutrients</Text>
+              <View style={styles.ringsRow}>
+                {MACRO_RINGS.map(ring => (
+                  <MacroRingMobile
+                    key={ring.key}
+                    label={ring.label}
+                    value={consumed[ring.key]}
+                    goal={goals[ring.key]}
+                    color={ring.color}
+                    unit={ring.unit}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* Quick actions */}
+            <View style={styles.quickActions}>
+              <TouchableOpacity
+                style={styles.primaryAction}
+                onPress={handleLogPress}
+                accessibilityRole="button"
+                accessibilityLabel="Log a meal"
+              >
+                <Text style={styles.primaryActionText}>+ Log a meal</Text>
+                <Text style={styles.primaryActionSub}>{entries.length} logged today</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryAction}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/suggest');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Get a meal suggestion"
+              >
+                <Text style={styles.secondaryActionText}>✨ What to eat?</Text>
+                <Text style={styles.secondaryActionSub}>AI suggestion</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Today's log heading */}
+            <View style={styles.logHeader}>
+              <Text style={styles.sectionLabel}>Today's Log</Text>
+              <TouchableOpacity onPress={handleLogPress} accessibilityRole="button">
+                <Text style={styles.addLink}>+ Add</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState} accessibilityLabel="No meals logged yet">
+            <Text style={styles.emptyEmoji}>🍽️</Text>
+            <Text style={styles.emptyTitle}>No meals logged yet</Text>
+            <Text style={styles.emptyHint}>Start tracking your nutrition today.</Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={handleLogPress}
+              accessibilityRole="button"
+            >
+              <Text style={styles.emptyButtonText}>Log first meal</Text>
+            </TouchableOpacity>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <FoodCardMobile entry={item} onDelete={handleDelete} />
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        ListFooterComponent={<View style={{ height: 20 }} />}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFB' },
-  scroll: { padding: 16, paddingBottom: 32, gap: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  dateText: { fontSize: 20, fontWeight: '700', color: '#2D3436' },
-  streakBadge: { backgroundColor: '#FF6B6B20', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  streakText: { fontSize: 12, color: '#FF6B6B', fontWeight: '600' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#636E72', marginBottom: 12 },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  scrollContent: { padding: 16, gap: 12 },
+
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  dateLabelSmall: { fontSize: 11, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 },
+  pageTitle: { fontSize: 20, fontWeight: '700', color: '#1e293b', marginTop: 2 },
+  streakBadge: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  streakNumber: { fontSize: 16, fontWeight: '800', color: '#ea580c', lineHeight: 18 },
+  streakLabel: { fontSize: 9, color: '#f97316', fontWeight: '600', marginTop: 1 },
+
+  // Calorie card
+  calCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  calCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  calBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  calBadgeText: { fontSize: 11, fontWeight: '600' },
+  progressTrack: {
+    height: 10,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  calStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  calBigNumber: { fontSize: 26, fontWeight: '800', color: '#1e293b', lineHeight: 30 },
+  calSubLabel: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
+
+  // Macros card
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  sectionLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 },
   ringsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
-  logSection: { gap: 12 },
-  emptyState: { alignItems: 'center', paddingVertical: 32 },
-  emptyEmoji: { fontSize: 40, marginBottom: 8 },
-  emptyText: { fontSize: 14, color: '#B2BEC3', fontWeight: '500' },
-  emptyHint: { fontSize: 12, color: '#B2BEC3', marginTop: 4 },
+
+  // Quick actions
+  quickActions: { flexDirection: 'row', gap: 10 },
+  primaryAction: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    borderRadius: 16,
+    padding: 14,
+    gap: 4,
+  },
+  primaryActionText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  primaryActionSub: { fontSize: 11, color: '#bbf7d0' },
+  secondaryAction: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  secondaryActionText: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+  secondaryActionSub: { fontSize: 11, color: '#94a3b8' },
+
+  // Log section
+  logHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  addLink: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
+
+  // Empty state
+  emptyState: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    gap: 6,
+  },
+  emptyEmoji: { fontSize: 36, marginBottom: 4 },
+  emptyTitle: { fontSize: 14, fontWeight: '700', color: '#1e293b' },
+  emptyHint: { fontSize: 12, color: '#94a3b8', textAlign: 'center' },
+  emptyButton: {
+    marginTop: 12,
+    backgroundColor: '#16a34a',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  emptyButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 });

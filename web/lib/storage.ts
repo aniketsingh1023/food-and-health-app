@@ -3,14 +3,18 @@
  * All operations are safe (SSR-compatible, no throws).
  */
 
-import { FoodLogEntry, HabitLog, DailyGoals } from '@/types';
+import { FoodLogEntry, HabitLog, DailyGoals, ChatMessage, WeeklyInsight } from '@/types';
 import { getDefaultGoals } from './nutritionCalc';
 
 const KEYS = {
-  FOOD_LOG: 'fh_food_log',
-  HABIT_LOGS: 'fh_habit_logs',
-  GOALS: 'fh_goals',
-  STREAK: 'fh_streak',
+  FOOD_LOG:      'fh_food_log',
+  HABIT_LOGS:    'fh_habit_logs',
+  GOALS:         'fh_goals',
+  STREAK:        'fh_streak',
+  STREAK_DATE:   'fh_last_streak_date',
+  CHAT_HISTORY:  'fh_chat_history',
+  LAST_INSIGHT:  'fh_last_insight',
+  INSIGHT_DATE:  'fh_insight_date',
 } as const;
 
 function isBrowser(): boolean {
@@ -52,6 +56,12 @@ export function getFoodLogForDate(date: string): FoodLogEntry[] {
 export function addFoodLogEntry(entry: FoodLogEntry): void {
   const log = getFoodLog();
   writeItem(KEYS.FOOD_LOG, [...log, entry]);
+}
+
+/** Removes a food log entry by ID. */
+export function removeFoodLogEntry(id: string): void {
+  const log = getFoodLog().filter(e => e.id !== id);
+  writeItem(KEYS.FOOD_LOG, log);
 }
 
 /** Returns entries for the last N days. */
@@ -110,16 +120,70 @@ export function getStreak(): number {
   return readItem<number>(KEYS.STREAK, 0);
 }
 
-/** Increments streak if today hasn't been counted. */
+/**
+ * Updates streak based on today's date.
+ * - Same day: no change (idempotent).
+ * - Consecutive day: increments streak.
+ * - Gap of 2+ days: resets streak to 1.
+ */
 export function updateStreak(): number {
+  if (!isBrowser()) return 0;
   const today = new Date().toISOString().slice(0, 10);
-  const lastKey = 'fh_last_streak_date';
-  const lastDate = isBrowser() ? localStorage.getItem(lastKey) : null;
+  const lastDate = localStorage.getItem(KEYS.STREAK_DATE);
 
   if (lastDate === today) return getStreak();
 
-  const streak = getStreak() + 1;
-  writeItem(KEYS.STREAK, streak);
-  if (isBrowser()) localStorage.setItem(lastKey, today);
-  return streak;
+  let newStreak = 1;
+  if (lastDate) {
+    const last = new Date(lastDate);
+    const curr = new Date(today);
+    const diffDays = Math.round((curr.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) {
+      newStreak = getStreak() + 1;
+    }
+    // diffDays >= 2 → reset to 1 (already set above)
+  }
+
+  writeItem(KEYS.STREAK, newStreak);
+  localStorage.setItem(KEYS.STREAK_DATE, today);
+  return newStreak;
+}
+
+// ─── Chat History ─────────────────────────────────────────────────────────────
+
+/** Returns persisted chat messages. */
+export function getChatHistory(): ChatMessage[] {
+  return readItem<ChatMessage[]>(KEYS.CHAT_HISTORY, []);
+}
+
+/** Saves chat messages to localStorage. */
+export function saveChatHistory(messages: ChatMessage[]): void {
+  // Keep only the last 100 messages to avoid storage bloat
+  writeItem(KEYS.CHAT_HISTORY, messages.slice(-100));
+}
+
+/** Clears the chat history. */
+export function clearChatHistory(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(KEYS.CHAT_HISTORY);
+}
+
+// ─── Weekly Insight ──────────────────────────────────────────────────────────
+
+export interface PersistedInsight {
+  insight: WeeklyInsight;
+  generatedAt: string; // ISO date string
+}
+
+/** Returns the last generated weekly insight. */
+export function getLastInsight(): PersistedInsight | null {
+  return readItem<PersistedInsight | null>(KEYS.LAST_INSIGHT, null);
+}
+
+/** Saves the generated weekly insight with timestamp. */
+export function saveLastInsight(insight: WeeklyInsight): void {
+  writeItem(KEYS.LAST_INSIGHT, {
+    insight,
+    generatedAt: new Date().toISOString(),
+  });
 }

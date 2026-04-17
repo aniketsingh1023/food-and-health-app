@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WeeklyInsight } from '@/types';
-import { getRecentFoodLog, getWeeklyHabitLogs, getDailyGoals } from '@/lib/storage';
+import { getRecentFoodLog, getWeeklyHabitLogs, getDailyGoals, getLastInsight, saveLastInsight } from '@/lib/storage';
 import { getWeeklyInsights } from '@/services/insightsService';
 
 function ScoreMeter({ score }: { score: number }) {
@@ -29,10 +29,35 @@ function ScoreMeter({ score }: { score: number }) {
   );
 }
 
+function formatRelativeDate(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'yesterday';
+  return `${diffDays} days ago`;
+}
+
 export default function InsightsPage() {
   const [insight, setInsight] = useState<WeeklyInsight | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Restore persisted insight on mount
+  useEffect(() => {
+    const persisted = getLastInsight();
+    if (persisted) {
+      setInsight(persisted.insight);
+      setGeneratedAt(persisted.generatedAt);
+    }
+  }, []);
 
   async function fetchInsights() {
     setLoading(true);
@@ -43,7 +68,9 @@ export default function InsightsPage() {
         habitLogs: getWeeklyHabitLogs(),
         goals: getDailyGoals(),
       });
+      saveLastInsight(data);
       setInsight(data);
+      setGeneratedAt(new Date().toISOString());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error — check your connection.');
     } finally {
@@ -102,7 +129,14 @@ export default function InsightsPage() {
             style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}
             aria-labelledby="score-heading"
           >
-            <h2 id="score-heading" className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Overall score</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 id="score-heading" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Overall score</h2>
+              {generatedAt && (
+                <span className="text-[10px] text-slate-400">
+                  Generated {formatRelativeDate(generatedAt)}
+                </span>
+              )}
+            </div>
             <ScoreMeter score={insight.overallScore} />
             <p className="text-sm text-slate-600 mt-4 leading-relaxed">{insight.summary}</p>
           </section>
@@ -171,8 +205,14 @@ export default function InsightsPage() {
             className="w-full border-2 border-slate-200 text-slate-600 font-semibold py-2.5 rounded-xl text-sm
               hover:border-green-400 hover:text-green-700 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-green-600"
           >
-            Regenerate
+            {loading ? (
+              <span className="inline-flex items-center gap-2 justify-center">
+                <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" aria-hidden="true" />
+                Regenerating…
+              </span>
+            ) : 'Regenerate'}
           </button>
+          {error && <p className="text-sm text-red-500 text-center" role="alert">{error}</p>}
         </div>
       )}
     </main>

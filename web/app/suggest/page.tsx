@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MealSuggestion } from '@/types';
+import { MealSuggestion, MealType } from '@/types';
 import { useFoodLog } from '@/hooks/useFoodLog';
 import { useDailyStats } from '@/hooks/useDailyStats';
 import { getTimeOfDay } from '@/lib/nutritionCalc';
@@ -19,14 +19,23 @@ const PREFERENCE_CHIPS = [
   'Light meal', 'Post-workout', 'Budget-friendly',
 ];
 
+function guessMealType(): MealType {
+  const h = new Date().getHours();
+  if (h < 10) return 'breakfast';
+  if (h < 14) return 'lunch';
+  if (h < 20) return 'dinner';
+  return 'snack';
+}
+
 export default function SuggestPage() {
-  const { entries } = useFoodLog();
+  const { entries, logFood } = useFoodLog();
   const { stats } = useDailyStats(entries);
   const [suggestion, setSuggestion] = useState<MealSuggestion | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preferences, setPreferences] = useState('');
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
+  const [logStatus, setLogStatus] = useState<'idle' | 'logging' | 'logged'>('idle');
 
   function toggleChip(chip: string) {
     setSelectedChips(prev =>
@@ -37,6 +46,7 @@ export default function SuggestPage() {
   async function fetchSuggestion() {
     setLoading(true);
     setError(null);
+    setLogStatus('idle');
     const allPrefs = [...selectedChips, preferences.trim()].filter(Boolean).join(', ');
     try {
       const data = await suggestMeal({
@@ -51,6 +61,16 @@ export default function SuggestPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleLogSuggestion() {
+    if (!suggestion || logStatus !== 'idle') return;
+    setLogStatus('logging');
+    await logFood({
+      description: suggestion.name + (suggestion.description ? ` — ${suggestion.description}` : ''),
+      mealType: guessMealType(),
+    });
+    setLogStatus('logged');
   }
 
   const { consumed, goals } = stats;
@@ -192,15 +212,46 @@ export default function SuggestPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={fetchSuggestion}
-              disabled={loading}
-              className="w-full border-2 border-slate-200 text-slate-600 font-semibold py-2.5 rounded-xl text-sm
-                hover:border-green-400 hover:text-green-700 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-green-600"
-            >
-              Try a different suggestion
-            </button>
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleLogSuggestion}
+                disabled={logStatus !== 'idle'}
+                aria-label="Log this meal to your food diary"
+                className={`py-2.5 rounded-xl text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-green-600 ${
+                  logStatus === 'logged'
+                    ? 'bg-green-100 text-green-700 border-2 border-green-200'
+                    : logStatus === 'logging'
+                    ? 'bg-green-50 text-green-500 border-2 border-green-100'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {logStatus === 'logged' ? (
+                  <span className="inline-flex items-center gap-1.5 justify-center">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    Logged!
+                  </span>
+                ) : logStatus === 'logging' ? (
+                  <span className="inline-flex items-center gap-1.5 justify-center">
+                    <span className="w-3.5 h-3.5 border-2 border-green-300 border-t-green-600 rounded-full animate-spin" aria-hidden="true" />
+                    Logging…
+                  </span>
+                ) : 'Log this meal'}
+              </button>
+
+              <button
+                type="button"
+                onClick={fetchSuggestion}
+                disabled={loading}
+                className="border-2 border-slate-200 text-slate-600 font-semibold py-2.5 rounded-xl text-sm
+                  hover:border-green-400 hover:text-green-700 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+              >
+                Try another
+              </button>
+            </div>
           </div>
         </section>
       )}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { FoodLogEntry, MealType } from '@/types';
-import { getFoodLogForDate, addFoodLogEntry } from '@/lib/storage';
+import { getFoodLogForDate, addFoodLogEntry, removeFoodLogEntry, updateStreak } from '@/lib/storage';
 import { analyzeFood } from '@/services/foodService';
 
 interface LogFoodParams {
@@ -15,6 +15,7 @@ interface UseFoodLogReturn {
   isLogging: boolean;
   error: string | null;
   logFood: (params: LogFoodParams) => Promise<FoodLogEntry | null>;
+  removeEntry: (id: string) => void;
   refresh: () => void;
 }
 
@@ -36,6 +37,7 @@ export function useFoodLog(): UseFoodLogReturn {
     try {
       const entry = await analyzeFood({ description, mealType });
       addFoodLogEntry(entry);
+      updateStreak();
       refresh();
       return entry;
     } catch (err) {
@@ -46,5 +48,10 @@ export function useFoodLog(): UseFoodLogReturn {
     }
   }, [refresh]);
 
-  return { entries, isLogging, error, logFood, refresh };
+  const removeEntry = useCallback((id: string) => {
+    removeFoodLogEntry(id);
+    refresh();
+  }, [refresh]);
+
+  return { entries, isLogging, error, logFood, removeEntry, refresh };
 }

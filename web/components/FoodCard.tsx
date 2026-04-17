@@ -1,17 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import { FoodLogEntry } from '@/types';
 import { NutritionGrade } from './NutritionGrade';
 
 interface FoodCardProps {
   entry: FoodLogEntry;
+  onDelete?: (id: string) => void;
 }
 
 const MEAL_LABELS: Record<string, string> = {
   breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
+  lunch:     'Lunch',
+  dinner:    'Dinner',
+  snack:     'Snack',
 };
 
 const MACROS = [
@@ -22,9 +24,22 @@ const MACROS = [
   { key: 'fiber'    as const, label: 'Fiber',   unit: 'g',   color: '#10b981' },
 ];
 
-export function FoodCard({ entry }: FoodCardProps) {
-  const { analysis, mealType, loggedAt } = entry;
+export function FoodCard({ entry, onDelete }: FoodCardProps) {
+  const { analysis, mealType, loggedAt, id } = entry;
   const time = new Date(loggedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const [expanded, setExpanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  function handleDeleteClick() {
+    if (confirming) {
+      onDelete?.(id);
+    } else {
+      setConfirming(true);
+      setTimeout(() => setConfirming(false), 3000);
+    }
+  }
+
+  const hasIngredients = analysis.ingredients && analysis.ingredients.length > 0;
 
   return (
     <article
@@ -46,7 +61,32 @@ export function FoodCard({ entry }: FoodCardProps) {
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">{analysis.servingSize}</p>
         </div>
-        <NutritionGrade score={analysis.healthScore} size="md" />
+        <div className="flex items-center gap-2 shrink-0">
+          <NutritionGrade score={analysis.healthScore} size="md" />
+          {onDelete && (
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              aria-label={confirming ? 'Confirm delete' : 'Delete entry'}
+              title={confirming ? 'Tap again to confirm' : 'Remove entry'}
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+                confirming
+                  ? 'bg-red-500 text-white focus-visible:ring-red-500'
+                  : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 focus-visible:ring-red-400'
+              }`}
+            >
+              {confirming ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Macro row */}
@@ -81,6 +121,40 @@ export function FoodCard({ entry }: FoodCardProps) {
           <p className="text-[11px] text-green-800 leading-relaxed">
             <span className="font-semibold">AI tip: </span>{analysis.tip}
           </p>
+        </div>
+      )}
+
+      {/* Ingredients toggle */}
+      {hasIngredients && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            aria-expanded={expanded}
+            className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-600 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-green-500 rounded"
+          >
+            <svg
+              width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+              aria-hidden="true"
+            >
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            {expanded ? 'Hide' : 'Show'} ingredients ({analysis.ingredients.length})
+          </button>
+          {expanded && (
+            <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Ingredients list">
+              {analysis.ingredients.map((ing, i) => (
+                <span
+                  key={i}
+                  className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full"
+                >
+                  {ing}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </article>

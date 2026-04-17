@@ -7,7 +7,7 @@ import { useFoodLog } from '@/hooks/useFoodLog';
 import { useDailyStats } from '@/hooks/useDailyStats';
 
 export default function DashboardPage() {
-  const { entries } = useFoodLog();
+  const { entries, removeEntry } = useFoodLog();
   const { stats } = useDailyStats(entries);
   const { consumed, goals, streak } = stats;
 
@@ -181,7 +181,7 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-3">
             {entries.slice().reverse().map(entry => (
-              <FoodCard key={entry.id} entry={entry} />
+              <FoodCard key={entry.id} entry={entry} onDelete={removeEntry} />
             ))}
           </div>
         )}

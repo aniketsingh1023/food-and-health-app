@@ -32,7 +32,7 @@ const QUICK_ADDS = [
 ];
 
 export default function LogPage() {
-  const { entries, isLogging, error, logFood } = useFoodLog();
+  const { entries, isLogging, error, logFood, removeEntry } = useFoodLog();
   const [description, setDescription] = useState('');
   const [mealType, setMealType] = useState<MealType>(guessMealType());
   const [lastLogged, setLastLogged] = useState<string | null>(null);
@@ -164,7 +164,7 @@ export default function LogPage() {
           </h2>
           <div className="space-y-3">
             {entries.slice().reverse().map(entry => (
-              <FoodCard key={entry.id} entry={entry} />
+              <FoodCard key={entry.id} entry={entry} onDelete={removeEntry} />
             ))}
           </div>
         </section>

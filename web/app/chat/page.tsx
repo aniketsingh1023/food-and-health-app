@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { sendChatMessage } from '@/services/chatService';
-import { getRecentFoodLog, getDailyGoals } from '@/lib/storage';
+import { getRecentFoodLog, getDailyGoals, getChatHistory, saveChatHistory, clearChatHistory } from '@/lib/storage';
 import { sumMacros } from '@/lib/nutritionCalc';
 import type { ChatMessage, ChatContext } from '@/types';
 
@@ -14,6 +14,13 @@ const QUICK_CHIPS = [
   'Am I eating enough fibre?',
   'What are good pre-workout foods?',
 ];
+
+const WELCOME_MESSAGE: ChatMessage = {
+  id: 'welcome',
+  role: 'assistant',
+  content: "Hi! I'm your NutriAI coach. Ask me anything about your nutrition, meal ideas, or how you're tracking today.",
+  createdAt: new Date().toISOString(),
+};
 
 function newId() {
   return Math.random().toString(36).slice(2, 10);
@@ -60,19 +67,23 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 }
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: "Hi! I'm your NutriAI coach. Ask me anything about your nutrition, meal ideas, or how you're tracking today.",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const history = getChatHistory();
+    return history.length > 0 ? history : [WELCOME_MESSAGE];
+  });
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Persist messages whenever they change (skip during streaming to avoid partial writes)
+  useEffect(() => {
+    if (!isStreaming) {
+      saveChatHistory(messages);
+    }
+  }, [messages, isStreaming]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,6 +95,17 @@ export default function ChatPage() {
     const consumed = sumMacros(entries);
     const recentMeals = getRecentFoodLog(3).map(e => e.description);
     return { consumed, goals, recentMeals };
+  }
+
+  function handleClear() {
+    if (showClearConfirm) {
+      clearChatHistory();
+      setMessages([WELCOME_MESSAGE]);
+      setShowClearConfirm(false);
+    } else {
+      setShowClearConfirm(true);
+      setTimeout(() => setShowClearConfirm(false), 3000);
+    }
   }
 
   const send = useCallback(async (text: string) => {
@@ -122,7 +144,6 @@ export default function ChatPage() {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection error. Try again.');
-      // Remove the empty assistant message on failure
       setMessages(prev => prev.filter(m => m.id !== assistantId));
     } finally {
       setIsStreaming(false);
@@ -137,21 +158,40 @@ export default function ChatPage() {
     }
   }
 
+  const isOnlyWelcome = messages.length === 1 && messages[0].id === 'welcome';
+
   return (
     <main className="flex flex-col flex-1 max-w-2xl mx-auto w-full h-full">
       {/* Header */}
       <div className="px-4 pt-5 pb-3 border-b border-slate-100 bg-white sticky top-0 z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2a10 10 0 0 1 10 10c0 5.5-4.5 10-10 10S2 17.5 2 12 6.5 2 12 2z"/>
-              <path d="M12 8v4l3 3"/>
-            </svg>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a10 10 0 0 1 10 10c0 5.5-4.5 10-10 10S2 17.5 2 12 6.5 2 12 2z"/>
+                <path d="M12 8v4l3 3"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">NutriAI Coach</p>
+              <p className="text-xs text-green-600 font-medium">Online · Powered by Gemini</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800">NutriAI Coach</p>
-            <p className="text-xs text-green-600 font-medium">Online · Powered by Gemini</p>
-          </div>
+          {!isOnlyWelcome && (
+            <button
+              type="button"
+              onClick={handleClear}
+              aria-label={showClearConfirm ? 'Confirm clear conversation' : 'Clear conversation'}
+              title={showClearConfirm ? 'Tap again to confirm' : 'Clear chat history'}
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+                showClearConfirm
+                  ? 'bg-red-500 text-white focus-visible:ring-red-500'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-400'
+              }`}
+            >
+              {showClearConfirm ? 'Confirm' : 'Clear'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -186,7 +226,7 @@ export default function ChatPage() {
       </div>
 
       {/* Quick chips — shown only at start */}
-      {messages.length <= 2 && (
+      {isOnlyWelcome && (
         <div className="px-4 pb-3">
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Suggested</p>
           <div className="flex flex-wrap gap-1.5">
